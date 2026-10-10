@@ -20,7 +20,11 @@ shopping assistant.
 <!-- VIDEO DEMO: Replace the placeholder below with your uploaded video's GitHub
 attachment URL, on its own line. Keep a blank line above and below the URL. -->
 
-*Video demo coming soon.*
+
+
+https://github.com/user-attachments/assets/4d26a288-8290-41fe-ada8-16a67919d0a3
+
+
 
 ## Features
 
