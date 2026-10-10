@@ -12,6 +12,16 @@ This is a fake store: no payments, purchases, fulfillment, or live inventory.
 Prices and aggregate ratings are a **2023 historical snapshot**. Luma uses original
 branding and is not affiliated with Amazon, Walmart, or the featured brands.
 
+## Video demo
+
+Watch Luma browse products, compare options, and recommend skincare through its AI
+shopping assistant.
+
+<!-- VIDEO DEMO: Replace the placeholder below with your uploaded video's GitHub
+attachment URL, on its own line. Keep a blank line above and below the URL. -->
+
+*Video demo coming soon.*
+
 ## Features
 
 - Marketplace navigation, search, category/budget filters, details and simulated cart.
