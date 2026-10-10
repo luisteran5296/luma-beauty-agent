@@ -1,0 +1,10 @@
+.gcloudignore
+.git
+.venv
+__pycache__
+**/__pycache__
+deployment_metadata.json
+artifacts
+tests
+.env
+.env.*

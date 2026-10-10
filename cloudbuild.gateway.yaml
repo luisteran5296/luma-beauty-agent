@@ -1,0 +1,7 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, gateway.Dockerfile, -t, us-central1-docker.pkg.dev/sitiosweb1/beauty-store/api:v3, .]
+images:
+  - us-central1-docker.pkg.dev/sitiosweb1/beauty-store/api:v3
+options:
+  logging: CLOUD_LOGGING_ONLY

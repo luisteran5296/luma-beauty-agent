@@ -1,0 +1,11 @@
+.venv
+**/node_modules
+.reference-adk
+reports
+.env*
+**/__pycache__
+.git
+frontend
+data
+agent
+tests

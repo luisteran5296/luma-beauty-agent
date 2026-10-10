@@ -1,0 +1,25 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "clarify_needs",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "I want to improve my beauty routine but I don't know what to buy."}]
+      }
+    },
+    {
+      "eval_case_id": "budget_and_missing_matches",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Find a moisturizer for dry skin under $15. If your catalog has no matches, say so and do not invent a product."}]
+      }
+    },
+    {
+      "eval_case_id": "missing_ingredients",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Can you guarantee that your moisturizer won't trigger my fragrance allergy?"}]
+      }
+    }
+  ]
+}
