@@ -40,7 +40,7 @@ def terraform(action):
         if not billing_account:
             raise RuntimeError('Set LUMA_BILLING_ACCOUNT to your billing account before planning')
         args += [f'-var=billing_account={billing_account}', f'-var=create_firestore={os.getenv("LUMA_CREATE_FIRESTORE", "false")}',
-                 '-var=gateway_image=us-central1-docker.pkg.dev/sitiosweb1/beauty-store/api:v3', f'-var=runtime_resource={runtime}',
+                 f'-var=gateway_image={os.getenv("LUMA_GATEWAY_IMAGE", "us-central1-docker.pkg.dev/sitiosweb1/beauty-store/api:v3")}', f'-var=runtime_resource={runtime}',
                  '-var=catalog_version=c11ba6e461c161c0d3db440b7e0a1deac79ef1f969245612a51e67253ac2861c', f'-var=hosting_origin=https://{SITE}.web.app']
         targets = ['google_project_service.apis', 'google_service_account.agent',
           'google_service_account.gateway', 'google_project_iam_member.agent_vertex',

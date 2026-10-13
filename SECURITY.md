@@ -18,7 +18,11 @@ Local auth bypass is forbidden in cloud; keep development servers on localhost.
 Catalog data is untrusted evidence. Agent controls require grounded IDs and API
 cards use canonical prices/links, but natural-language accuracy is not guaranteed.
 
-Bounded chat history and anonymous UIDs persist in Firestore; no age-based deletion
-is implemented. Define retention before wider use. Gateway metrics omit prompts/
-headers; automatic ADK telemetry is disabled. Public traffic can incur costs despite
-chat limits; alerts are not hard spending caps.
+Bounded chat history and anonymous UIDs persist in Firestore with 30-day inactivity
+expiry and TTL deletion. Expired histories are rejected before asynchronous deletion.
+Metadata-only telemetry omits prompts, responses, tool payloads, identities and
+credentials; native ADK spans pass through an allowlist sanitizer. Visitor throttling
+is five admitted turns/minute, alongside global quotas. It does not prevent new
+anonymous identities or provide edge DDoS protection. Public traffic can incur costs
+despite chat limits; alerts are not hard spending caps. See the detailed
+[threat model](docs/THREAT_MODEL.md) and [privacy controls](docs/HARDENING.md).

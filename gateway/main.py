@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from uuid import UUID
@@ -13,6 +14,18 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from beauty.catalog import get_catalog
 from gateway.quota import FirestoreQuota, MemoryQuota, LimitExceeded, SessionConflict
+from gateway.runtime import RuntimeTransport
+from gateway.tracing import TraceMiddleware
+from beauty.telemetry import span, emit, setup, shutdown, request_id, request_started
+from opentelemetry import trace
+from beauty.contracts import Result
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.trace import Status, StatusCode
+
+
+async def threaded(operation, function, *args, **kwargs):
+    with span(operation):
+        return await asyncio.to_thread(function, *args, **kwargs)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -40,7 +53,7 @@ async def visitor(authorization: str | None = Header(default=None)):
         raise HTTPException(401, 'Sign in anonymously to start a conversation')
     from firebase_admin import auth
     try:
-        claims = await asyncio.to_thread(auth.verify_id_token, authorization[7:], app=firebase_app())
+        claims = await threaded('authentication', auth.verify_id_token, authorization[7:], app=firebase_app())
         return claims['uid']
     except Exception:
         raise HTTPException(401, 'Invalid or expired session') from None
@@ -56,16 +69,26 @@ def quota():
 
 @asynccontextmanager
 async def lifespan(app):
-    get_catalog()  # Fail closed on mismatched production catalog / embeddings.
+    setup('luma-gateway')
+    await threaded('catalog_load', get_catalog)
     if os.getenv('ENVIRONMENT') == 'production':
         if os.getenv('LOCAL_DEV_AUTH') == 'true' or not os.getenv('AGENT_RUNTIME_RESOURCE'):
             raise RuntimeError('Production requires Firebase auth and an Agent Runtime resource')
         quota()
-    yield
+    app.state.runtime = RuntimeTransport()
+    try:
+        yield
+    finally:
+        await app.state.runtime.close()
+        shutdown()
 
 
-app = FastAPI(title='Luma Beauty API', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','), allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
+app = FastAPI(title='Luma Beauty API', lifespan=lifespan,
+    docs_url=None if os.getenv('ENVIRONMENT') == 'production' else '/docs',
+    redoc_url=None if os.getenv('ENVIRONMENT') == 'production' else '/redoc',
+    openapi_url=None if os.getenv('ENVIRONMENT') == 'production' else '/openapi.json')
+app.add_middleware(CORSMiddleware, allow_origins=os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','), allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'], expose_headers=['X-Request-ID'])
+app.add_middleware(TraceMiddleware)
 
 
 class ChatRequest(BaseModel):
@@ -121,13 +144,15 @@ async def runtime_events(payload):
     import re
     if not re.fullmatch(r'projects/sitiosweb1/locations/us-central1/reasoningEngines/\d+', resource):
         raise RuntimeError('Unexpected Agent Runtime resource')
-    import google.auth
-    from google.auth.transport.requests import Request
-    credentials, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform'])
-    await asyncio.to_thread(credentials.refresh, Request())
+    token = await asyncio.to_thread(app.state.runtime.token)
+    headers = {'Authorization': f'Bearer {token}'}
     url = f'https://us-central1-aiplatform.googleapis.com/reasoningEngines/v1/{resource}/api/shop/stream'
-    async with httpx.AsyncClient(timeout=90) as client:
-        async with client.stream('POST', url, headers={'Authorization': f'Bearer {credentials.token}'}, json=payload) as response:
+    with span('runtime_transport'):
+        TraceContextTextMapPropagator().inject(headers)
+        # Agent Runtime's proxy replaces the HTTP traceparent. A private,
+        # server-generated field preserves correlation across that boundary.
+        wire = {**payload, 'traceparent':headers.get('traceparent')}
+        async with app.state.runtime.client.stream('POST', url, headers=headers, json=wire) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
                 if line.startswith('data: '):
@@ -136,52 +161,87 @@ async def runtime_events(payload):
 
 @app.post('/api/chat')
 async def chat(request: ChatRequest, uid: str = Depends(visitor)):
+    started = request_started.get() or time.monotonic()
+    rid = request_id.get()
     message = request.clean_message
-    if not get_catalog().products:
+    catalog = await threaded('catalog_load', get_catalog)
+    if not catalog.products:
         raise HTTPException(503, 'The real product catalog is awaiting import. Shopping advice will be available after it is loaded.')
     if not os.getenv('AGENT_RUNTIME_RESOURCE') and os.getenv('LOCAL_AGENT') != 'true':
         raise HTTPException(503, 'Shopping agent is awaiting configuration')
     try:
-        history, turns = await asyncio.to_thread(quota().reserve, uid, str(request.session_id), str(request.request_id))
+        history, turns = await threaded('quota_reservation', quota().reserve, uid, str(request.session_id), str(request.request_id))
     except LimitExceeded as exc:
+        emit('chat_rejected', outcome='quota')
         raise HTTPException(429, str(exc)) from None
     except SessionConflict as exc:
+        emit('chat_rejected', outcome='conflict')
         raise HTTPException(409, str(exc)) from None
-    except Exception:
+    except Exception as exc:
+        emit('chat_failed', outcome='internal', duration_seconds=time.monotonic()-started,
+            error_type=type(exc).__name__)
         raise HTTPException(503, 'Chat allowance could not be verified') from None
+    trace.get_current_span().set_attribute('luma.admitted', True)
 
     async def stream():
         answer = None
         completed = False
+        runtime = runtime_events({'message': message, 'history': history, 'catalog_version': catalog.version})
         try:
+            emit('chat_started')
+            emit('first_status', first_status_seconds=time.monotonic()-started)
             yield sse('status', {'message': 'Checking the product catalog…'})
             async with asyncio.timeout(90):
-                async for event in runtime_events({'message': message, 'history': history, 'catalog_version': get_catalog().version}):
+                async for event in runtime:
+                    if completed:
+                        raise RuntimeError('Runtime sent events after final result')
                     if event.get('type') == 'status':
                         yield sse('status', {'message': event['message']})
                     elif event.get('type') == 'error':
                         raise RuntimeError('Agent could not validate its response')
                     elif event.get('type') == 'result':
-                        if event.get('catalog_version') != get_catalog().version:
-                            raise RuntimeError('Agent catalog version mismatch')
-                        answer = str(event['answer'])[:6000]
-                        ids = list(dict.fromkeys(event.get('product_ids', [])))[:6]
-                        cards = [get_catalog().products[pid].public() for pid in ids if pid in get_catalog().products]
+                        with span('response_validation'):
+                            result = Result.model_validate(event)
+                            current = await threaded('catalog_load', get_catalog)
+                            if result.catalog_version != current.version or any(pid not in catalog.products for pid in result.product_ids):
+                                emit('guard_failure', outcome='invalid_result')
+                                raise RuntimeError('Invalid grounded response')
+                            candidate_answer = result.answer
+                            ids = list(dict.fromkeys(result.product_ids))
+                            cards = [catalog.products[pid].public() for pid in ids]
                         # Cards always come from canonical data, never model-supplied prices or links.
+                        usage = result.usage.model_dump()
+                        # Commit history and release the session before the client can send its next turn.
+                        await threaded('history_persistence', quota().finish, str(request.session_id), str(request.request_id), message, candidate_answer, ids)
+                        answer = candidate_answer
+                        completed = True
                         yield sse('answer', {'text': answer})
                         yield sse('recommendations', {'products': cards})
-                        usage = event.get('usage', {})
-                        logger.info('shopping_turn_metrics %s', json.dumps({'usage': usage, 'latency_seconds': event.get('latency_seconds')}))
-                        # Commit history and release the session before the client can send its next turn.
-                        await asyncio.to_thread(quota().finish, str(request.session_id), str(request.request_id), message, answer, ids)
-                        completed = True
                         yield sse('done', {'turns_remaining': 10 - turns, 'usage': usage})
+                        emit('chat_completed', outcome='ok', duration_seconds=time.monotonic()-started, **usage,
+                            model_calls=result.model_calls, tool_calls=result.tool_calls,
+                            model_cost_usd=usage['input_tokens']*.25/1e6 + usage['output_tokens']*1.5/1e6)
+                        break
+                    else:
+                        raise RuntimeError('Unexpected runtime event')
                 if not completed:
                     raise RuntimeError('Agent stream ended without a validated result')
         except (Exception, asyncio.CancelledError) as exc:
-            logger.warning('shopping_turn_failed %s', type(exc).__name__)
+            emit('chat_failed', outcome='cancelled' if isinstance(exc, asyncio.CancelledError) else 'internal',
+                duration_seconds=time.monotonic()-started, error_type=type(exc).__name__)
             if not isinstance(exc, asyncio.CancelledError):
-                yield sse('error', {'message': 'The assistant could not finish. Please try again. This attempt counts toward the demo allowance.', 'turns_remaining': 10 - turns})
+                yield sse('error', {'message': 'The assistant could not finish. Please try again. This attempt counts toward the demo allowance.', 'turns_remaining': 10 - turns, 'request_id': rid})
         finally:
-            await asyncio.shield(asyncio.to_thread(quota().finish, str(request.session_id), str(request.request_id), message, answer))
+            # Close on the same task/context that entered the transport span.
+            # Do not leave the HTTP stream waiting on garbage collection.
+            try:
+                await runtime.aclose()
+            except Exception as exc:
+                emit('runtime_cleanup', outcome='failed', error_type=type(exc).__name__)
+            if not completed:
+                try:
+                    await asyncio.shield(threaded('lease_release', quota().finish, str(request.session_id), str(request.request_id), message, None))
+                except Exception as exc:
+                    # Lease expires automatically if persistence is unavailable.
+                    emit('lease_cleanup', outcome='failed', error_type=type(exc).__name__)
     return StreamingResponse(stream(), media_type='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})

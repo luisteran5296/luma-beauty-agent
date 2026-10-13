@@ -1,0 +1,6 @@
+# Local synthetic grading tools only, excluded from both production images.
+# Avoid the SDK's older vulnerable evaluation-extra dependency pin.
+google-cloud-aiplatform==1.165.1
+pandas==3.0.6
+litellm==1.88.6
+tenacity==9.1.4

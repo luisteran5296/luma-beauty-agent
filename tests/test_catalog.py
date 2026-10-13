@@ -63,5 +63,7 @@ def test_amazon_parser_missing_rating():
 
 
 def test_real_catalog_is_not_test_fixtures():
+    if not Path('data/catalog.json').exists():
+        pytest.skip('Private catalog snapshot is not part of the public repository')
     rows = json.loads(Path('data/catalog.json').read_text(encoding='utf-8'))
     assert not any(row['id'].startswith('B00000000') for row in rows)

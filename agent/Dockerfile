@@ -24,7 +24,7 @@ COPY ./pyproject.toml ./README.md ./uv.lock* ./
 COPY ./app ./app
 COPY ./beauty ./beauty
 
-RUN uv sync --frozen
+RUN uv sync --frozen --no-dev
 
 ARG AGENT_VERSION=0.0.0
 ENV AGENT_VERSION=${AGENT_VERSION}
@@ -32,4 +32,4 @@ ENV AGENT_VERSION=${AGENT_VERSION}
 EXPOSE 8080
 ENV PYTHONUNBUFFERED=1
 
-CMD ["/code/.venv/bin/python", "-m", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/code/.venv/bin/python", "-m", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

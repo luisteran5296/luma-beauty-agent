@@ -13,10 +13,10 @@ async def test_tool_allowances_and_grounded_ids(monkeypatch,product):
     result=await agent.search_products('moisturizer',context,max_price_usd=10)
     assert result['products'][0]['id']==product.id
     assert context.state['allowed_product_ids']==[product.id]
-    assert agent.get_product('not-a-product',context)=={'error':'Product not found'}
-    agent.get_product(product.id,context)
+    assert await agent.get_product('not-a-product',context)=={'error':'Product not found'}
+    await agent.get_product(product.id,context)
     with pytest.raises(RuntimeError,match='Tool allowance'):
-        agent.get_product(product.id,context)
+        await agent.get_product(product.id,context)
 
 
 @pytest.mark.asyncio

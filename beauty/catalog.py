@@ -4,9 +4,13 @@ import math
 import os
 import re
 import time
+import threading
 from functools import lru_cache
 from pathlib import Path
 from beauty.models import Product
+from beauty.telemetry import span
+
+_catalog_lock = threading.RLock()
 
 
 def load_json(path):
@@ -80,7 +84,7 @@ def _snapshot(catalog_path, bundle_path, version):
     return catalog
 
 
-def get_catalog():
+def _get_catalog():
     if os.getenv('CATALOG_BACKEND') == 'firestore':
         pointer = _cloud_pointer(int(time.monotonic() // 30))
         catalog = _snapshot(pointer['catalog_path'], pointer['retrieval_bundle_path'], pointer['version'])
@@ -100,3 +104,9 @@ def get_catalog():
     if os.getenv('ENVIRONMENT') == 'production' and (len(catalog.products) != 100 or not catalog.vectors or any(not p.title_en or not p.description_en for p in catalog.products.values())):
         raise RuntimeError('Production requires 100 English-translated products and matching embeddings')
     return catalog
+
+
+def get_catalog():
+    # LRU cache alone does not prevent simultaneous misses loading twice.
+    with _catalog_lock, span('catalog_load'):
+        return _get_catalog()

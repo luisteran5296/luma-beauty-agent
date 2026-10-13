@@ -55,11 +55,17 @@ Website history/ownership is stored in Firestore `beauty_store_sessions`. Its AD
 runner uses ephemeral sessions populated with bounded history. Website chats
 therefore do not appear in Agent Platform's managed Sessions UI. The actual agent
 is visible under Deployments in `us-central1`; see [live console link](LIVE.md).
-Agent Registry registration is separate and not implemented.
+Registry discovery confirmed one existing Luma entry; no duplicate was created.
 
 The scaffold preserves ADK, A2A and reasoning-engine adapters. Generated managed
 session utilities are distinct from the shopping route. Browser access goes
 through the public gateway; runtime and storage stay IAM-protected.
+
+The October 13 release adds server-owned trace propagation, metadata-only native
+ADK/OpenTelemetry spans, log-based bounded-label metrics, a Monitoring dashboard
+and console-only incidents. Session/visitor inactivity TTL is 30 days; the gateway
+rejects expired state before deletion and throttles each visitor transactionally.
+See [the observability architecture](HARDENING.md) for the detailed flow.
 
 ## Limits
 

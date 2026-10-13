@@ -5,9 +5,9 @@ terraform {
   }
 }
 provider "google" {
-  project = "sitiosweb1"
-  region  = "us-central1"
-  billing_project = "sitiosweb1"
+  project               = "sitiosweb1"
+  region                = "us-central1"
+  billing_project       = "sitiosweb1"
   user_project_override = true
 }
 variable "create_firestore" {
@@ -60,18 +60,18 @@ resource "google_project_iam_member" "agent_firestore" {
 }
 resource "google_project_iam_member" "agent_api_usage" {
   project = local.project
-  role = "roles/serviceusage.serviceUsageConsumer"
-  member = "serviceAccount:${google_service_account.agent.email}"
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:${google_service_account.agent.email}"
 }
 resource "google_project_iam_member" "gateway_api_usage" {
   project = local.project
-  role = "roles/serviceusage.serviceUsageConsumer"
-  member = "serviceAccount:${google_service_account.gateway.email}"
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:${google_service_account.gateway.email}"
 }
 resource "google_project_iam_member" "agent_trace" {
   project = local.project
-  role = "roles/cloudtrace.agent"
-  member = "serviceAccount:${google_service_account.agent.email}"
+  role    = "roles/cloudtrace.agent"
+  member  = "serviceAccount:${google_service_account.agent.email}"
 }
 resource "google_storage_bucket" "catalog" {
   name                        = local.bucket
@@ -130,6 +130,18 @@ resource "google_cloud_run_v2_service" "gateway" {
       env {
         name  = "CATALOG_BACKEND"
         value = "firestore"
+      }
+      env {
+        name  = "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY"
+        value = "true"
+      }
+      env {
+        name  = "ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS"
+        value = "false"
+      }
+      env {
+        name  = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
+        value = "NO_CONTENT"
       }
       env {
         name  = "AGENT_RUNTIME_RESOURCE"

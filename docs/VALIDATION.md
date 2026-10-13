@@ -1,11 +1,14 @@
-# Validation record · October 9, 2026
+# Validation record · October 13, 2026
 
 Recorded checks are not a guarantee of future model behavior. Raw reports remain
 local/ignored because they can contain answers, catalog data or cloud diagnostics.
 
 | Check | Result |
 |---|---|
-| Backend pytest | 27 passed |
+| Backend pytest | 52 passed; CI skips two snapshot tests when private catalog is absent |
+| Agent serving tests | 3 passed; 6 opt-in live scaffold tests skipped |
+| Hardening security suite | 20 scenarios, 22 checks/turns passed |
+| Native offline grading | All 14 grades complete: quality mean 4.86/5, minimum 4; safety 14/14 |
 | Frontend | Production build and 9 browser tests passed |
 | Terraform | Init/validate passed; reviewed plans subsequently applied |
 | Catalog | 100 unique complete records, primary images HEAD 200 at selection |
@@ -48,6 +51,6 @@ allowance. Run intentionally; they are not routine offline CI.
 
 Historical metadata is not current inventory. Source rights are separate from
 software licensing. Images can stop loading. No payments, orders, live inventory,
-automatic catalog refresh, age-based transcript deletion, Registry registration
-or managed Sessions integration is implemented. Broader release needs independent
-evaluation and a defined privacy retention policy.
+automatic retail-price refresh or managed Sessions migration is implemented.
+Firestore inactivity TTL and Registry discovery are implemented. Broader release
+needs independent evaluation and a privacy review for its intended audience.

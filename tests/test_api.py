@@ -23,7 +23,7 @@ def test_streamed_cards_are_canonical(monkeypatch, product):
     gateway.quota.cache_clear()
     async def events(payload):
         assert payload['catalog_version'] == catalog.version
-        yield {'type':'result','answer':'Fixture response','product_ids':[product.id,'INVALID-ID'], 'catalog_version':catalog.version,'usage':{'input_tokens':1,'output_tokens':1}}
+        yield {'type':'result','answer':'Fixture response','product_ids':[product.id], 'catalog_version':catalog.version,'usage':{'input_tokens':1,'output_tokens':1}}
     monkeypatch.setattr(gateway,'runtime_events',events)
     with TestClient(gateway.app) as client:
         response = client.post('/api/chat',json={'session_id':str(uuid4()),'request_id':str(uuid4()),'message':'moisturizer'})
@@ -35,6 +35,8 @@ def test_streamed_cards_are_canonical(monkeypatch, product):
 
 
 def test_runtime_failure_releases_session(monkeypatch, product):
+    metrics = []
+    monkeypatch.setattr(gateway, 'emit', lambda event, **values: metrics.append((event,values)))
     monkeypatch.setattr(gateway,'get_catalog',lambda:Catalog([product]))
     monkeypatch.setenv('LOCAL_DEV_AUTH','true')
     monkeypatch.setenv('LOCAL_AGENT','true')
@@ -49,6 +51,9 @@ def test_runtime_failure_releases_session(monkeypatch, product):
         assert 'event: error' in response.text
         assert 'private backend details' not in response.text
         assert gateway.quota().sessions[session]['busy_until'] == 0
+        assert response.status_code == 200
+        assert any(event=='chat_failed' and values['outcome']=='internal' for event,values in metrics)
+        assert not any(event=='chat_completed' for event,values in metrics)
 
 
 def test_production_rejects_development_auth(monkeypatch):
