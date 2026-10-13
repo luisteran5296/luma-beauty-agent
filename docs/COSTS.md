@@ -73,7 +73,7 @@ Sources:
 - https://firebase.google.com/pricing
 - https://cloud.google.com/run/pricing
 
-## Observability candidate: additional cost
+## Observability release: additional cost
 
 Estimate checked October 13, 2026: **$0–$4/month additional**, targeting less than
 $5 at the existing 1,000-turn cap and modest browsing. This is an estimate, not a

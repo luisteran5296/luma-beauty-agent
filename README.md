@@ -14,9 +14,9 @@ conversations, versioned data, and explicit usage controls.
 [Architecture](docs/ARCHITECTURE.md) · [Setup](docs/LOCAL_SETUP.md) ·
 [Deployment](docs/DEPLOYMENT.md) · [Costs](docs/COSTS.md)
 
-**Observability upgrade:** a reviewed-release candidate adds Google-native traces,
+**Observability upgrade:** the October 13 release adds Google-native traces,
 performance metrics, dashboards, console incidents, security evaluations and
-offline CI. The live site still runs the previous release. See
+offline CI. See
 [hardening design and measured results](docs/HARDENING.md) and
 [threat model](docs/THREAT_MODEL.md).
 
@@ -68,17 +68,17 @@ acknowledges the gap rather than supplying an invented product or claim.
 - Versioned catalog updates with atomic activation and 30-second cloud refresh.
   Updating products does not require redeploying the agent.
 - Agent Runtime and Cloud Run scale to zero, with at most two instances each.
-- Hardening candidate: transaction-backed visitor throttling, 30-day session expiry,
+- Transaction-backed visitor throttling, 30-day session expiry,
   server-owned trace context/support IDs and strict fail-closed runtime validation.
 - Reused cloud clients and a bounded query embedding cache; seven local baseline
-  turns fell from 138.16 to 30.64 seconds. Repeat warm p95: 13.39 seconds at
-  concurrency one and 12.60 seconds at concurrency two (six warm samples each;
-  hosted cold/warm performance still requires rollout validation).
-- Forty-eight backend tests, two agent checks and nine browser tests pass. The
+  turns fell from 138.16 to 29.42 seconds. Final local warm p95 was 2.52 seconds
+  across six samples; this includes local process overhead and is not a hosted
+  speedup claim. See the hardening guide for hosted measurements and limits.
+- Fifty-two backend tests, three agent checks and nine browser tests pass. The
   20-scenario suite passes deterministic constraints; final native offline grading
-  has 12/14 quality scores (mean 4.75/5) and 14/14 safety passes. Two Google judge
-  timeouts remain a rollout blocker. The earlier candidate scored 4.79/5 across all
-  fourteen responses. These small
+  has all 14 quality scores (mean 4.86/5, minimum 4/5) and 14/14 safety passes.
+  Focused sequential grading resolved the timeouts; actual retrieved evidence is
+  supplied even when an answer has no recommendation cards. These small
   evaluations do not establish production safety. Detailed reports stay private.
 
 ## Stack
@@ -250,7 +250,8 @@ Catalog refresh is manual; current retail prices are not fetched automatically.
 Website history is persisted in Firestore and supplied to ephemeral ADK sessions.
 It therefore does not appear in the platform's managed Sessions screen. The agent
 is deployed under Agent Platform **Deployments** in `us-central1`; Registry
-registration is separate and has not been performed. See [live resources](docs/LIVE.md).
+discovery confirmed one existing Luma Registry entry, so no duplicate was created.
+See [live resources](docs/LIVE.md).
 
 ### API and spending controls
 
@@ -278,8 +279,9 @@ IDs and overlapping turns are rejected. Failed attempts count toward allowance.
 | Quota calendar | America/Mexico_City |
 
 Dedicated logs record usage/latency and error classes without logging prompts or
-authorization headers. Automatic ADK telemetry exporters and long-term Memory Bank
-are disabled. Age-based session deletion is not yet implemented. Billing alerts
+authorization headers. Native ADK spans use one sanitized OpenTelemetry exporter;
+duplicate scaffold exporters and long-term Memory Bank are disabled. Firestore TTL
+expires inactive sessions after 30 days, with synchronous expiry enforcement. Billing alerts
 notify; application quotas provide chat usage control rather than a total cloud
 spending cap.
 
@@ -372,7 +374,7 @@ Recorded October 9, 2026:
 
 | Validation | Outcome |
 |---|---|
-| Backend | 27 tests passed: imports, versions, retrieval, auth, quotas, ownership and failure handling |
+| Backend | 52 tests passed: imports, retrieval, quotas, ownership, expiry, trace privacy/propagation and failure handling |
 | Browser | 9 tests passed: cart, filters, chat, modal accessibility, mobile and motion |
 | Frontend | TypeScript check and production build passed |
 | Real model evaluation | Seven catalog turns passed: budget search, comparison, vague needs, cleanser search, no match, missing ingredients and invented-product resistance |
@@ -397,6 +399,10 @@ traffic/latency can change the bill. The reference project has MXN 180 monthly
 budget alerts at 50%, 80% and 100%; alerts notify rather than stop spending.
 See [detailed assumptions and sources](docs/COSTS.md).
 
+The deployed observability upgrade adds an estimated **$0–$4/month** at the same
+quota, with continuous grading disabled. The $5 additional-cost target is not a
+billing cap; actual ingestion and shared allowances must be reconciled in Billing.
+
 ## Demo scope and future work
 
 Implemented: deployed agent inference, catalog tools, real historical products,
@@ -406,9 +412,9 @@ manually refreshed; no current stock, live prices or written reviews are availab
 Downloaded third-party records and embeddings are excluded from the public repo;
 selection/import code and templates are included.
 
-Possible extensions include a licensed current product feed, transcript retention
-automation, independent recommendation evaluations, larger-catalog retrieval,
-managed Sessions/Registry integration, and authenticated user accounts. These are
+Possible extensions include a licensed current product feed, larger independent
+recommendation evaluations, larger-catalog retrieval, managed Sessions migration,
+and authenticated user accounts. These are
 future work, not features of the deployed demo.
 
 ## License

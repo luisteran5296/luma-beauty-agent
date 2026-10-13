@@ -23,6 +23,7 @@ BASE = 'https://beauty-store-api-cgbi4c4u5q-uc.a.run.app'
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--exercise-failures',action='store_true')
+    parser.add_argument('--exercise-cancellation',action='store_true')
     args = parser.parse_args()
     db = firestore.Client(project='sitiosweb1',credentials=credentials())
     before = db.collection('beauty_store_quotas').document(month_key()).get().to_dict() or {}
@@ -76,6 +77,20 @@ def main():
                 assert ref.get().to_dict()['busy_until']==0
         finally:
             ref.update({'history':original})
+    cancelled_rid = None
+    if args.exercise_cancellation:
+        with http.post(BASE+'/api/chat',headers=headers,stream=True,timeout=100,
+                json={'session_id':session,'request_id':str(uuid4()),
+                    'message':'Compare moisturizers under $15.'}) as response:
+            response.raise_for_status()
+            cancelled_rid=response.headers['X-Request-ID']
+            for line in response.iter_lines(decode_unicode=True,chunk_size=1):
+                if line.startswith('event: status'):
+                    break  # Close only this synthetic visitor's connection.
+        for _ in range(15):
+            if ref.get().to_dict()['busy_until']==0: break
+            time.sleep(2)
+        assert ref.get().to_dict()['busy_until']==0
     cloud = AuthorizedSession(credentials())
     cloud.headers['x-goog-user-project']='sitiosweb1'
     observed = []
@@ -96,18 +111,34 @@ def main():
         if trace_name:
             found = cloud.get('https://cloudtrace.googleapis.com/v1/'+trace_name,timeout=30)
             if found.status_code==200:
-                names = {s['name'] for s in found.json().get('spans',[])}
-                if {'luma.agent_turn','adk.generate_content','adk.execute_tool'} <= names:
+                spans=found.json().get('spans',[])
+                names = {s['name'] for s in spans}
+                ids={s['spanId'] for s in spans}
+                roots=[s for s in spans if s.get('parentSpanId','0')=='0']
+                connected=all(s.get('parentSpanId','0')=='0' or s['parentSpanId'] in ids for s in spans)
+                if ({'luma.request','luma.agent_turn','adk.generate_content','adk.execute_tool'} <= names
+                        and len(roots)==1 and roots[0]['name']=='luma.request' and connected):
                     trace=found.json(); break
         time.sleep(5)
     serialized = json.dumps({'logs':observed,'trace':trace})
     assert token not in serialized and uid not in serialized and session not in serialized
     assert 'Find a moisturizer for dry skin under $15.' not in serialized
     assert 'invalid-synthetic-role' not in serialized
+    cancellation_outcome=None
+    if cancelled_rid:
+        result=cloud.post('https://logging.googleapis.com/v2/entries:list',timeout=30,json={
+            'resourceNames':['projects/sitiosweb1'],'filter':
+                'jsonPayload.request_id="'+cancelled_rid+'" AND jsonPayload.event="chat_failed"',
+            'orderBy':'timestamp desc','pageSize':10})
+        result.raise_for_status()
+        cancellation_outcome=next((e['jsonPayload'].get('outcome') for e in result.json().get('entries',[])),None)
     report = {'synthetic_only':True,'turns':turns,'quota_before':before,
         'trace':trace,'correlated_log_events':[e.get('jsonPayload',{}).get('event') for e in observed],
         'trace_found':bool(trace),'sensitive_content_excluded':True,
-        'controlled_failures_verified':args.exercise_failures,'lease_cleanup_verified':True}
+        'controlled_failures_verified':args.exercise_failures,'lease_cleanup_verified':True,
+        'hosted_disconnect_lease_verified':args.exercise_cancellation,
+        'disconnect_request_id':cancelled_rid,
+        'cancellation_outcome':cancellation_outcome}
     Path('reports/hosted-hardening.json').write_text(json.dumps(report,indent=2,default=str))
     print(json.dumps({k:v for k,v in report.items() if k not in ['trace','quota_before']}))
     if not trace: raise SystemExit('Trace not available yet; inspect ingestion before acceptance')

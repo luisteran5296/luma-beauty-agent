@@ -1,7 +1,6 @@
 # Observability and hardening release
 
-Status: implemented candidate; cloud rollout requires review. The website currently
-runs the previous release. This work strengthens a portfolio demo's engineering
+Status: deployed and verified October 13, 2026. This work strengthens a portfolio demo's engineering
 controls; it does not provide enterprise certification or an availability SLA.
 
 ## Request and trace flow
@@ -17,7 +16,7 @@ sequenceDiagram
     Browser->>Gateway: Firebase token + existing chat fields
     Gateway->>Gateway: New support ID and server-owned trace
     Gateway->>DB: Atomic ownership, replay, throttle and quota reservation
-    Gateway->>Agent: IAM-authenticated stream + W3C traceparent
+    Gateway->>Agent: IAM stream + server-generated private traceparent
     Agent->>Model: Count tokens, retrieve evidence, bounded model calls
     Agent-->>Gateway: Strict result + IDs + catalog fingerprint + usage
     Gateway->>Gateway: Validate against canonical snapshot
@@ -33,6 +32,14 @@ prevent duplicate capture. Exporter failures cannot interrupt shopping.
 `gateway/tracing.py` discards incoming public trace parents and generates
 `X-Request-ID`; the private runtime extracts only the gateway's propagated
 trace parent. Errors include the same support ID without backend exception text.
+
+The native proxy can replace the HTTP trace header. A strictly validated optional
+private body field preserves the server-generated context across that boundary;
+the public chat contract is unchanged. W3C trace flags include SDK-generated `03`.
+An initial validator rejected that valid flag; traffic was restored to the working
+gateway during repair, then resumed after the private compatibility probe passed.
+The OTLP resource explicitly includes `gcp.project_id`; quota headers alone do not
+select the export destination. Neither field is passed to the shopping prompt.
 
 The gateway buffers at most 128 traces and 128 completed child spans per trace.
 It exports all admitted chats and samples other HTTP requests at 10%; overflow
@@ -104,14 +111,23 @@ It includes local CLI credential/client overhead and is not a hosted speedup cla
 | Concurrency 1 | 18.49 s | 2.13 s | 13.39 s | 6 |
 | Concurrency 2 | 16.46 s | 2.99 s | 12.60 s | 6 |
 | Component capture, concurrency 1 | 16.08 s | 2.15 s | 4.23 s | 6 |
+| Final agent / captured evidence, concurrency 1 | 16.03 s | 2.36 s | 2.52 s | 6 |
 
 The component capture measured 14.60 seconds of model time, 12.10 seconds of
 embedding time, 1.60 seconds of token counting and 0.045 seconds of catalog loading
 across seven turns. Retrieval took 0.042 seconds and response validation 0.002
 seconds. Component totals can overlap and must not be summed as request latency.
-Gateway credential and persistence timing is instrumented but has not been measured
-on the candidate deployment. Cloud cold starts and hosted warm p95 remain rollout
-checks. Six warm samples cannot establish a production percentile or SLA.
+The hosted seven-turn runs completed 7/7 at each concurrency: p50/p95 **2.33/2.84 s**
+at concurrency 1 and **2.31/2.51 s** at concurrency 2. All first statuses in the
+concurrency-1 run arrived within 0.48 s. The first run overlapped the separate
+synthetic acceptance check briefly; concurrency means benchmark client concurrency.
+Both services were already awake. An isolated cloud cold start was not measured.
+Seven samples cannot establish a production percentile or SLA.
+
+The connected acceptance trace measured 3.18 s gateway duration, 2.22 s cumulative
+model calls, 0.146 s embedding, 0.006 s retrieval, 0.007 s credentials, 0.257 s quota
+reservation and 0.132 s history persistence. Spans overlap; these are one synthetic
+turn's component measurements, not aggregate service guarantees.
 
 Lifecycle HTTP clients/credentials are reused and refreshed only when needed.
 Blocking database/catalog/embedding work runs off the async request loop. Catalog
@@ -123,7 +139,7 @@ Answers are never cached. Exact token counting and model/tool limits remain.
 
 `evals/hardening.json` contains 20 scenarios: 12 synthetic model scenarios (14 turns)
 and eight deterministic security/failure scenarios. The latest run passed all 22
-checks/turns, using 24,749 input and 1,443 output tokens. Deterministic assertions
+checks/turns, using 26,713 input and 1,601 output tokens. Deterministic assertions
 verify canonical IDs, recommendation count and explicit budgets; these do not prove
 natural-language grounding. Native quality/safety grading is a separate release gate.
 
@@ -132,24 +148,33 @@ candidate responses and labeled with shopping-code and catalog fingerprints. Goo
 returned internal item errors and no grades. Preserve the failed report; it is not
 a passing evaluation. The tooling also supports Google's native offline `EvalTask`
 interface for a bounded synthetic fallback. Candidate reports explicitly identify
-`candidate-not-deployed`; after rollout associate the tested commit/image/runtime
-revision with a new report. No live-user data or simulator-driven inference is used.
+`candidate-not-deployed` for the pre-rollout grading. Private release association
+now maps its unchanged shopping-code/catalog fingerprints to deployed agent source
+`114d104`, gateway source `b8e123b` and revision `beauty-store-api-00008-hhk`.
+No live-user data or simulator-driven inference is used.
 
-The supported native offline `EvalTask` fallback completed all 14 responses for
-the earlier candidate: mean quality **4.79/5**, minimum **4/5**, and **14/14 safety
-passes**. After adding the mid-turn catalog-version guard, the final candidate has
-**12/14 quality grades**, mean **4.75/5**, minimum **4/5**, and **14/14 safety passes**.
-Two quality requests still failed with Google judge deadlines after a bounded retry;
-the final release gate (every quality ≥4 and safety=1) is **not yet satisfied**.
-The earlier result does not substitute for the final candidate. Grading used saved
-synthetic responses, without rerunning shopping inference. Complete the missing
-grades before rollout. Grounded IDs and budget assertions passed. This small sample
-does not guarantee every natural-language claim. The performance comparison preserved deterministic
-constraints. Native paired grading of the seven benchmark cases returned six ties;
-one judge request still failed after a bounded retry. Manual evidence review of
-that cleanser comparison found the claims in the catalog, but it is not a native
-grade. A statistically meaningful semantic regression study remains outside these
-small measurements.
+The final supported native offline `EvalTask` run completed all 14 responses:
+mean quality **4.86/5**, minimum **4/5**, and **14/14 safety passes**. The declared
+gate (every quality ≥4 and safety=1) passes for shopping-code fingerprint
+`8262a9d089ee816a9cb241825cd47048642621791917721f34e2b063e0cad206`.
+Focused factual evidence removes URLs/provenance and duplicate translations, not
+product facts. Cases run sequentially with a maximum 600-second retry window.
+
+Review found a real serum-as-moisturizer mistake; instructions now distinguish
+primary products from add-ons and the injected-price scenario asserts that type.
+Review also fixed the evaluation harness: it previously used only recommended-card
+IDs as evidence, incorrectly grading no-card answers against an empty catalog.
+The final run records actual tool and prior-product evidence, with a regression
+test for that failure. Earlier reports are retained privately; their grades do not
+substitute for the corrected final evaluation.
+
+The final seven-case native pairwise comparison is complete: four ties, one
+candidate preference and two baseline preferences. Both baseline preferences were
+investigated: an additional valid budget option and a more specific clarifying
+question. There were no deterministic ID/budget violations; the candidate passes
+the absolute quality/safety gate. This small sample does not establish statistical
+non-inferiority or guarantee every natural-language claim. Final seven local turns
+took 29.42 seconds versus the original 138.16-second baseline.
 
 Production dependencies no longer install the unused evaluation SDK extra. Its
 LiteLLM pin was affected by CVE-2026-84377; grading libraries are isolated in
@@ -178,6 +203,10 @@ $env:GCLOUD_ACCOUNT='luisteran5296@gmail.com'
 .venv/Scripts/python.exe -m scripts.native_evaluation --offline-sdk --retry-missing
 .venv/Scripts/python.exe -m scripts.registry_status
 .venv/Scripts/python.exe -m scripts.review_infrastructure
+.venv/Scripts/python.exe -m scripts.verify_hosted_hardening --exercise-failures
+.venv/Scripts/python.exe -m scripts.benchmark_hosted --concurrency 1
+.venv/Scripts/python.exe -m scripts.benchmark_hosted --concurrency 2
+.venv/Scripts/python.exe -m scripts.observability_status
 ```
 
 ## Console locations
@@ -185,7 +214,7 @@ $env:GCLOUD_ACCOUNT='luisteran5296@gmail.com'
 - [Luma Agent Runtime](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/4860633318019825664?project=sitiosweb1): deployment and native observability.
 - [Cloud Trace](https://console.cloud.google.com/traces/list?project=sitiosweb1): filter the Luma service; open correlated metadata-only spans.
 - [Logs Explorer](https://console.cloud.google.com/logs/query?project=sitiosweb1): `jsonPayload.luma_service=("gateway" OR "agent")`.
-- [Monitoring dashboards](https://console.cloud.google.com/monitoring/dashboards?project=sitiosweb1): dashboard appears after Terraform rollout.
+- [Luma Monitoring dashboard](https://console.cloud.google.com/monitoring/dashboards/builder/00dcfaef-f0dc-47c6-9db3-d669d1d35ada?project=sitiosweb1): deployed performance, reliability, security and cost charts.
 - [Alerting incidents](https://console.cloud.google.com/monitoring/alerting?project=sitiosweb1): console-only conditions.
 - [Agent Registry](https://console.cloud.google.com/agent-registry?project=sitiosweb1): REST discovery confirmed one matching `luma-agent` in `us-central1`; no registration needed.
 - [Model evaluations](https://console.cloud.google.com/vertex-ai/evaluation?project=sitiosweb1): managed evaluation runs; fallback experiment is `luma-hardening-offline`.
@@ -195,11 +224,15 @@ its storage backend. Native console URLs and labels can change independently.
 
 ## Reviewed rollout and rollback
 
-The reviewed Terraform plan proposes 31 store changes, no deletes: one gateway
+The original reviewed Terraform plan applied 31 store changes, no deletes: one gateway
 update; two TTL fields; fourteen log metrics; five alert policies; uptime check;
 dashboard; two narrowly scoped `roles/telemetry.tracesWriter` grants; five existing
-API enablements brought under store state. The private runtime update is a separate
-`agents-cli` action. The candidate `api:v4-hardening` image is planned but not built.
+API enablements brought under store state. The private runtime update used
+`agents-cli`. Exporter/correlation repairs then updated only the gateway/runtime.
+The final gateway image `api:hardening-b8e123b` is pinned to
+`sha256:697bcaada390cda0a1446d216727b9083d5aa3f52833ad4bbdabf1d875ebea21`.
+The final refreshed Terraform plan has zero changes. Two TTL policies are ACTIVE;
+six legacy session records were backfilled. No duplicate Registry entry was created.
 The existing managed Firestore database remains in Terraform state; do not toggle
 its count to zero just because the database already exists.
 
@@ -220,6 +253,18 @@ SSE responses, cancellation/lease cleanup and incident behavior without exhausti
 the real allowance. Compare identical hosted cases at concurrency 1 and 2; record
 first-instance starts separately and investigate every quality regression. Check
 actual telemetry ingestion and billing after a representative day.
+
+Hosted acceptance completed: one trace contains 26 spans with one gateway root,
+no missing parents, native model/tool spans and no checked sensitive content.
+The success turn completed in 3.25 s. Three controlled HTTP-200 SSE failures returned
+sanitized support IDs and released leases. Native completed/failed/internal metric
+series exist, and an internal-failure incident opened with all five policies having
+no notification channels. The rollout compatibility failure also exercised that
+incident; it is documented above rather than counted as successful traffic.
+An additional hosted disconnect released its lease. No `cancelled` failure event
+was observed, so the proxy may have allowed work to complete after client closure;
+cancellation-specific metric behavior is verified offline only. Isolated cloud
+cold-start timing and actual billing remain unmeasured.
 
 Rollback gateway traffic to the saved previous revision and redeploy the saved
 previous agent artifact to the same runtime. Preserve catalog pointer/version and
