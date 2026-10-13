@@ -41,6 +41,9 @@ def test_bad_refresh_does_not_replace_active_catalog(product, tmp_path):
 def test_real_selected_catalog_and_images():
     from scripts.import_catalog import read_products
     from pathlib import Path
+    import pytest
+    if not Path('data/catalog.json').exists() or not Path('data/retrieval-bundle.json').exists():
+        pytest.skip('Private catalog and embedding snapshot are not in the public repository')
     rows = read_products('data/catalog.json')
     assert len(rows) == len({p.id for p in rows}) == 100
     assert all(p.source == 'amazon_us_2023' and p.price_usd > 0 and p.source_snapshot == '2023' for p in rows)
