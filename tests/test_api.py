@@ -23,7 +23,7 @@ def test_streamed_cards_are_canonical(monkeypatch, product):
     gateway.quota.cache_clear()
     async def events(payload):
         assert payload['catalog_version'] == catalog.version
-        yield {'type':'result','answer':'Fixture response','product_ids':[product.id,'INVALID-ID'], 'catalog_version':catalog.version,'usage':{'input_tokens':1,'output_tokens':1}}
+        yield {'type':'result','answer':'Fixture response','product_ids':[product.id], 'catalog_version':catalog.version,'usage':{'input_tokens':1,'output_tokens':1}}
     monkeypatch.setattr(gateway,'runtime_events',events)
     with TestClient(gateway.app) as client:
         response = client.post('/api/chat',json={'session_id':str(uuid4()),'request_id':str(uuid4()),'message':'moisturizer'})

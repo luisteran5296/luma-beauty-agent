@@ -5,11 +5,14 @@ Run after git add and before commit/push.
 """
 import re
 import subprocess
+import sys
 from pathlib import PurePosixPath
 
 
 def main():
-    paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM', '-z']).decode().split('\0')
+    all_files = '--all' in sys.argv
+    command = ['git','ls-files','-z'] if all_files else ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM', '-z']
+    paths = subprocess.check_output(command).decode().split('\0')
     patterns = {
         'private key': re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
         'GitHub token': re.compile(r'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})'),

@@ -72,3 +72,34 @@ Sources:
 - https://docs.cloud.google.com/free/docs/free-cloud-features
 - https://firebase.google.com/pricing
 - https://cloud.google.com/run/pricing
+
+## Observability candidate: additional cost
+
+Estimate checked October 13, 2026: **$0–$4/month additional**, targeting less than
+$5 at the existing 1,000-turn cap and modest browsing. This is an estimate, not a
+billing cap. Reserve **$0.25–$2 one time** for the bounded synthetic evaluation;
+continuous grading is disabled. Existing shopping/model costs remain separate.
+
+Seven instrumented local agent turns produced 72 metadata records totaling 10,854
+bytes, approximately 1.5 KiB/turn, before cloud envelopes and gateway logs. Budget
+0.1 GiB/month of logs, 50,000 spans, and a conservative 12 MiB of sparse log-based
+metric ingestion. At paid rates these are approximately $0.05, $0.01 and $3.10.
+Allow another $0.75 for health requests, telemetry CPU and small storage/Firestore
+changes: approximately **$3.91/month even if account-wide metadata allowances
+are consumed**. Actual log-metric bytes and CPU cannot be established until rollout.
+
+Cloud discovery found no existing active uptime checks. One five-minute check at
+six locations gives approximately 51,840 executions/month, within the project's
+one-million free executions. Previously deleted checks or future unrelated checks
+could consume that allowance. If exhausted, uptime alone adds about $15.55/month;
+revise monitoring before rollout in that case. Listing checks does not fully verify
+project-wide billing/shared allowances. No account-wide trace/metric allowance is
+assumed in the paid-metadata estimate.
+
+Native Google resource metrics are reused without a separate hosted metrics server.
+Current alert policy pricing begins no sooner than September 1, 2027; reassess
+before that date. Shared log retention and project budget thresholds are unchanged.
+Extended retention, unusual browsing/abuse, build artifacts, taxes and unrelated
+services remain outside this estimate. `python -m scripts.hardening_cost` writes
+an ignored machine-readable estimate; reconcile it after a representative hosted day.
+[Google Observability pricing](https://cloud.google.com/products/observability/pricing).

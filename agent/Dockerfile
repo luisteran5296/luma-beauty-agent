@@ -32,4 +32,4 @@ ENV AGENT_VERSION=${AGENT_VERSION}
 EXPOSE 8080
 ENV PYTHONUNBUFFERED=1
 
-CMD ["/code/.venv/bin/python", "-m", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/code/.venv/bin/python", "-m", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

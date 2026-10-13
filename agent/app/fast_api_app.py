@@ -14,6 +14,7 @@
 
 import contextlib
 import os
+import asyncio
 from collections.abc import AsyncIterator
 
 from a2a.server.tasks import InMemoryTaskStore
@@ -23,6 +24,7 @@ from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner
 
 from app.app_utils import services
+from beauty.telemetry import setup, shutdown
 from app.app_utils.a2a import attach_a2a_routes
 from app.app_utils.reasoning_engine_adapter import (
     attach_reasoning_engine_routes,
@@ -32,9 +34,10 @@ load_dotenv()
 allow_origins = (
     os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
 )
-otel_to_cloud = os.environ.get(
-    "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY", ""
-).lower() in ("true", "1")
+# One process-wide provider/exporter with an allowlist sanitizer. ADK emits its
+# native spans into this provider; do not also install the scaffold exporters.
+setup('luma-agent')
+otel_to_cloud = False
 
 AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -43,7 +46,7 @@ AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from beauty.catalog import get_catalog
 
-    get_catalog()
+    await asyncio.to_thread(get_catalog)
     from app.agent import app as adk_app
     from app.agent import root_agent
 
@@ -62,12 +65,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         task_store=InMemoryTaskStore(),
         rpc_path=f"/a2a/{adk_app.name}",
     )
-    yield
+    try:
+        yield
+    finally:
+        from beauty.cloud import shared_model_client
+        if shared_model_client.cache_info().currsize:
+            await shared_model_client().aio.aclose()
+            shared_model_client().close()
+        shutdown()
 
 
 app: FastAPI = get_fast_api_app(
     agents_dir=AGENT_DIR,
-    web=True,
+    web=os.getenv('ENVIRONMENT') != 'production',
     artifact_service_uri=services.ARTIFACT_SERVICE_URI,
     allow_origins=allow_origins,
     session_service_uri=services.SESSION_SERVICE_URI,
@@ -83,7 +93,20 @@ attach_reasoning_engine_routes(app)
 
 from app.shopping_routes import router as shopping_router
 
+if os.getenv('ENVIRONMENT') == 'production':
+    # Runtime adapters above remain; interactive/debug/session mutation surfaces
+    # are unnecessary for the website's stateless shopping path.
+    app.router.routes[:] = [route for route in app.router.routes if
+        getattr(route, 'path', '').startswith(('/shop/', '/a2a/', '/api/reasoning_engine', '/api/stream_reasoning_engine'))]
+
+# FastAPI can defer include_router using an internal route wrapper without a
+# path. Include the required shopping router after pruning development surfaces.
 app.include_router(shopping_router)
+
+
+@app.get('/health')
+async def health():
+    return {'status': 'ok'}
 
 
 # Main execution

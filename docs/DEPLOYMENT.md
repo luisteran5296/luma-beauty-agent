@@ -97,7 +97,10 @@ Test that passthrough path with IAM authentication before continuing.
 These commands perform cloud writes when applying/publishing. The reference
 project's initial deployment has already completed; review current plans before
 repeating them. Set `LUMA_BILLING_ACCOUNT` privately and leave
-`LUMA_CREATE_FIRESTORE=false` for the existing database.
+`LUMA_CREATE_FIRESTORE` consistent with the existing Terraform state. If the database
+is already represented by `google_firestore_database.store[0]`, keep it `true`;
+setting it false proposes removing that managed resource. The hardening review
+helper reads this existing state safely and refuses plans containing deletes.
 
 ```powershell
 # After Terraform initialization and configuration review:
@@ -137,8 +140,21 @@ window can fail the version guard rather than mix facts and recommendation cards
 Quota counters use the Mexico City calendar month. Failed requests consume quota;
 request IDs prevent accidental replay, and a 120-second lease prevents overlapping
 messages in one session. The API timeout is 90 seconds and Cloud Run timeout is 100.
-Before broader release, choose and enforce a transcript retention policy for the
-namespaced session documents. Do not delete active monthly quota counters during cleanup.
+The hardening candidate implements 30-day inactivity expiry and a reviewed TTL
+backfill. Do not delete active monthly quota counters during cleanup.
 
 This pilot's 100-conversation cap bounds model usage, not the entire cloud bill.
 Unauthenticated page/API requests and excess traffic can still incur infrastructure charges.
+
+## 7. Observability candidate rollout
+
+See [HARDENING.md](HARDENING.md) for the concrete plan, measurements, private
+evaluation reports and post-deployment checks. The command in section 3 describes
+the previous release. For this candidate change the runtime telemetry flag to
+`true` and add `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false` and
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=NO_CONTENT`. Custom sanitized
+instrumentation uses one exporter; do not enable the scaffold exporter too.
+Preserve min=0, max=2, the current model, catalog and private invocation IAM.
+Build the reviewed gateway image, set `LUMA_GATEWAY_IMAGE` to its immutable tag,
+then regenerate/review the full plan before apply. Do not apply the candidate
+plan while its image is still unbuilt. CI never deploys this project.

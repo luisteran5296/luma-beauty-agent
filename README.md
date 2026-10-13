@@ -14,6 +14,12 @@ conversations, versioned data, and explicit usage controls.
 [Architecture](docs/ARCHITECTURE.md) · [Setup](docs/LOCAL_SETUP.md) ·
 [Deployment](docs/DEPLOYMENT.md) · [Costs](docs/COSTS.md)
 
+**Observability upgrade:** a reviewed-release candidate adds Google-native traces,
+performance metrics, dashboards, console incidents, security evaluations and
+offline CI. The live site still runs the previous release. See
+[hardening design and measured results](docs/HARDENING.md) and
+[threat model](docs/THREAT_MODEL.md).
+
 This is a fake store: no payments, purchases, fulfillment, or live inventory.
 Prices and aggregate ratings are a **2023 historical snapshot**. Luma uses original
 branding and is not affiliated with Amazon, Walmart, or the featured brands.
@@ -48,7 +54,7 @@ acknowledges the gap rather than supplying an invented product or claim.
 | Cloud infrastructure | Agent Runtime, Cloud Run, Firebase, Firestore, Storage and Terraform |
 | Access and state management | Anonymous identity, transaction-backed quotas, ownership and replay protection |
 | Product experience | Accessible chat modal, animated AI avatar, mobile layout and simulated shopping flow |
-| Validation and operations | Unit/browser tests, live evaluations, usage metrics and documented cost assumptions |
+| Validation and operations | Metadata-only OpenTelemetry, Google Trace/Logging/Monitoring, security evaluations, offline CI and reviewed Terraform releases |
 
 ## Features
 
@@ -62,6 +68,16 @@ acknowledges the gap rather than supplying an invented product or claim.
 - Versioned catalog updates with atomic activation and 30-second cloud refresh.
   Updating products does not require redeploying the agent.
 - Agent Runtime and Cloud Run scale to zero, with at most two instances each.
+- Hardening candidate: transaction-backed visitor throttling, 30-day session expiry,
+  server-owned trace context/support IDs and strict fail-closed runtime validation.
+- Reused cloud clients and a bounded query embedding cache; seven local baseline
+  turns fell from 138.16 to 30.64 seconds. Repeat warm p95: 13.39 seconds at
+  concurrency one and 12.60 seconds at concurrency two (six warm samples each;
+  hosted cold/warm performance still requires rollout validation).
+- Forty-seven backend tests, two agent checks and nine browser tests pass. The
+  20-scenario suite passes deterministic constraints; native offline grading of
+  fourteen synthetic responses scores 4.79/5 for quality and 14/14 safe. These small
+  evaluations do not establish production safety. Detailed reports stay private.
 
 ## Stack
 

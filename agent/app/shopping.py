@@ -2,22 +2,26 @@
 import json
 import time
 from uuid import uuid4
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.agents.run_config import RunConfig
 from google.genai import types
 from beauty.catalog import get_catalog
+from beauty.contracts import Turn
+from beauty.telemetry import span, emit
+import asyncio
 
 
 class Reply(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
     answer: str = Field(min_length=1, max_length=6000)
     product_ids: list[str] = Field(max_length=3)
 
 
-async def respond(payload):
+async def _respond(payload):
     from .agent import app as agent_app, evidence
-    catalog = get_catalog()
+    catalog = await asyncio.to_thread(get_catalog)
     if not catalog.products:
         raise RuntimeError('Catalog is empty')
     if payload.get('catalog_version') != catalog.version:
@@ -40,12 +44,22 @@ async def respond(payload):
             new_message=types.Content(role='user', parts=[types.Part(text=content)]), run_config=RunConfig(max_llm_calls=3)):
             if event.is_final_response() and event.content:
                 final_text = ''.join(part.text or '' for part in event.content.parts or [] if not part.thought)
-        reply = Reply.model_validate_json(final_text)
+        with span('response_validation'):
+            reply = Reply.model_validate_json(final_text)
         state = (await sessions.get_session(app_name=agent_app.name, user_id=user_id, session_id=session_id)).state
         allowed = set(state.get('allowed_product_ids', []))
         if any(pid not in allowed or pid not in catalog.products for pid in reply.product_ids):
+            emit('guard_failure', outcome='ungrounded_id')
             raise RuntimeError('Model recommended an ungrounded product ID')
         yield {'type': 'result', 'answer': reply.answer, 'product_ids': list(dict.fromkeys(reply.product_ids)),
-               'catalog_version': catalog.version, 'usage': state.get('usage', {}), 'latency_seconds': round(time.monotonic() - started, 3)}
+               'catalog_version': catalog.version, 'usage': state.get('usage', {}), 'latency_seconds': round(time.monotonic() - started, 3),
+               'model_calls': state.get('model_calls', 0), 'tool_calls': state.get('tool_calls', 0)}
     finally:
         await sessions.delete_session(app_name=agent_app.name, user_id=user_id, session_id=session_id)
+
+
+async def respond(payload):
+    payload = Turn.model_validate(payload).model_dump()
+    with span('agent_turn', **{'luma.catalog_version': payload['catalog_version']}):
+        async for event in _respond(payload):
+            yield event
