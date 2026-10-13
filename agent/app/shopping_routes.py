@@ -14,7 +14,8 @@ router = APIRouter()
 async def stream(turn: Turn, request: Request):
     # Private runtime route. Only gateway SA receives IAM access.
     async def events():
-        parent = TraceContextTextMapPropagator().extract({'traceparent': request.headers.get('traceparent', '')})
+        parent = TraceContextTextMapPropagator().extract({
+            'traceparent': turn.traceparent or request.headers.get('traceparent', '')})
         token = context.attach(parent)
         try:
             async for event in respond(turn.model_dump()):

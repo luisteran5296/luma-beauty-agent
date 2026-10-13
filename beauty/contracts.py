@@ -1,6 +1,6 @@
 """Strict, shared private-runtime wire contract."""
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class HistoryItem(BaseModel):
@@ -15,6 +15,15 @@ class Turn(BaseModel):
     message: str = Field(min_length=1, max_length=1200)
     history: list[HistoryItem] = Field(default_factory=list, max_length=12)
     catalog_version: str = Field(pattern=r'^[a-f0-9]{64}$')
+    traceparent: str | None = Field(default=None,max_length=55,
+        pattern=r'^00-[a-f0-9]{32}-[a-f0-9]{16}-(00|01)$')
+
+    @field_validator('traceparent')
+    @classmethod
+    def nonzero_trace(cls,value):
+        if value and (value.split('-')[1]=='0'*32 or value.split('-')[2]=='0'*16):
+            raise ValueError('Trace identifiers must be nonzero')
+        return value
 
 
 class Usage(BaseModel):

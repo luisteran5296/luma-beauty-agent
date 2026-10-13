@@ -238,20 +238,33 @@ async def test_gateway_runtime_context_has_one_trace_and_private_parent(monkeypa
         async def __aexit__(self, *args): pass
     class Client:
         def stream(self, *args, **kwargs):
-            captured.update(kwargs['headers']); return Stream()
+            captured.update(kwargs['headers'])
+            captured['wire'] = kwargs['json']
+            return Stream()
     class Runtime:
         client = Client()
         def token(self): return 'test-only-token'
     monkeypatch.setattr(gateway.app.state, 'runtime', Runtime(), raising=False)
     monkeypatch.setenv('AGENT_RUNTIME_RESOURCE', 'projects/sitiosweb1/locations/us-central1/reasoningEngines/123')
     with provider.get_tracer('test').start_as_current_span('luma.request') as root:
-        async for _ in gateway.runtime_events({}): pass
-        parent = TraceContextTextMapPropagator().extract(captured)
+        async for _ in gateway.runtime_events({'traceparent':'untrusted-input'}): pass
+        assert captured['wire']['traceparent']==captured['traceparent']
+        # Runtime's proxy may replace the header; the private field must retain
+        # the transport's original server-generated parent.
+        captured['traceparent'] = '00-'+'1'*32+'-'+'2'*16+'-01'
+        parent = TraceContextTextMapPropagator().extract({'traceparent':captured['wire']['traceparent']})
         with provider.get_tracer('test').start_as_current_span('luma.agent_turn', context=parent) as agent:
             assert agent.get_span_context().trace_id == root.get_span_context().trace_id
             assert agent.parent.span_id != root.get_span_context().span_id
             assert agent.parent.is_remote
     provider.shutdown()
+
+
+def test_runtime_trace_metadata_rejects_invalid_identifiers():
+    from pydantic import ValidationError
+    for invalid in ['untrusted','00-'+'0'*32+'-'+'1'*16+'-01','00-'+'1'*32+'-'+'0'*16+'-01']:
+        with pytest.raises(ValidationError):
+            Turn(message='synthetic',catalog_version='a'*64,traceparent=invalid)
 
 
 def test_shared_model_first_load_is_singleflight(monkeypatch):

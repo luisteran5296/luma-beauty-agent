@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 import requests
@@ -82,16 +83,22 @@ def main():
     for _ in range(12):
         # Public health traffic also lets request-based instances drain exporters.
         http.get(BASE+'/health',timeout=30)
+        cloud.get('https://us-central1-aiplatform.googleapis.com/reasoningEngines/v1/'
+            'projects/719793696278/locations/us-central1/reasoningEngines/4860633318019825664/api/health',timeout=30)
         response = cloud.post('https://logging.googleapis.com/v2/entries:list',timeout=30,json={
             'resourceNames':['projects/sitiosweb1'],'filter':
-                'jsonPayload.request_id="'+first['request_id']+'"','pageSize':100})
+                'timestamp >= "'+(datetime.now(timezone.utc)-timedelta(minutes=15)).isoformat()+
+                '" AND jsonPayload.request_id="'+first['request_id']+'"',
+                'orderBy':'timestamp desc','pageSize':100})
         response.raise_for_status()
         observed = response.json().get('entries',[])
         trace_name = next((e.get('trace') for e in observed if e.get('trace')),None)
         if trace_name:
             found = cloud.get('https://cloudtrace.googleapis.com/v1/'+trace_name,timeout=30)
-            if found.status_code==200 and len(found.json().get('spans',[]))>=10:
-                trace=found.json(); break
+            if found.status_code==200:
+                names = {s['name'] for s in found.json().get('spans',[])}
+                if {'luma.agent_turn','adk.generate_content','adk.execute_tool'} <= names:
+                    trace=found.json(); break
         time.sleep(5)
     serialized = json.dumps({'logs':observed,'trace':trace})
     assert token not in serialized and uid not in serialized and session not in serialized

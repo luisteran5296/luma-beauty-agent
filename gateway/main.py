@@ -149,7 +149,10 @@ async def runtime_events(payload):
     url = f'https://us-central1-aiplatform.googleapis.com/reasoningEngines/v1/{resource}/api/shop/stream'
     with span('runtime_transport'):
         TraceContextTextMapPropagator().inject(headers)
-        async with app.state.runtime.client.stream('POST', url, headers=headers, json=payload) as response:
+        # Agent Runtime's proxy replaces the HTTP traceparent. A private,
+        # server-generated field preserves correlation across that boundary.
+        wire = {**payload, 'traceparent':headers.get('traceparent')}
+        async with app.state.runtime.client.stream('POST', url, headers=headers, json=wire) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
                 if line.startswith('data: '):
