@@ -20,6 +20,28 @@ from beauty.catalog import Catalog
 import gateway.main as gateway
 
 
+def test_setup_supplies_required_otlp_project_resource(monkeypatch):
+    import requests
+    import google.auth
+    import google.auth.transport.requests
+    import beauty.telemetry as telemetry
+    monkeypatch.setattr(telemetry,'_provider',None)
+    monkeypatch.setattr(telemetry,'_service',None)
+    monkeypatch.setenv('GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY','true')
+    monkeypatch.setenv('LUMA_AGENT_ENGINE_ID','4860633318019825664')
+    monkeypatch.setattr(google.auth,'default',lambda **kwargs:(None,'sitiosweb1'))
+    monkeypatch.setattr(google.auth.transport.requests,'AuthorizedSession',lambda credentials:requests.Session())
+    monkeypatch.setattr(telemetry.trace,'set_tracer_provider',lambda provider:None)
+    telemetry.setup('luma-agent')
+    provider = telemetry._provider
+    try:
+        assert provider.resource.attributes['gcp.project_id']=='sitiosweb1'
+        assert provider.resource.attributes['gcp.vertex.agent.engine_id']=='4860633318019825664'
+        assert set(provider.resource.attributes) <= telemetry.RESOURCES
+    finally:
+        provider.shutdown()
+
+
 def test_exporter_removes_every_content_surface():
     class Capture:
         spans = []

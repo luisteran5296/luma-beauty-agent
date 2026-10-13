@@ -124,6 +124,7 @@ resource "google_monitoring_alert_policy" "health" {
 }
 
 resource "google_monitoring_alert_policy" "failures" {
+  depends_on   = [google_logging_metric.counts]
   project      = local.project
   display_name = "Luma: three internal chat failures in 15 minutes"
   combiner     = "OR"
@@ -145,6 +146,7 @@ resource "google_monitoring_alert_policy" "failures" {
 }
 
 resource "google_monitoring_alert_policy" "latency" {
+  depends_on   = [google_logging_metric.counts, google_logging_metric.distributions]
   project      = local.project
   display_name = "Luma: completion p95 above 30s with 20 completed turns/hour"
   combiner     = "AND"
@@ -181,6 +183,7 @@ resource "google_monitoring_alert_policy" "latency" {
 }
 
 resource "google_monitoring_alert_policy" "quota" {
+  depends_on   = [google_logging_metric.distributions]
   for_each     = { conversations = 80, turns = 800 }
   project      = local.project
   display_name = "Luma: monthly ${each.key} above 80 percent"

@@ -152,7 +152,8 @@ def setup(service):
         project = project or 'sitiosweb1'
         session = AuthorizedSession(credentials)
         resource = {'service.name': service, 'service.version': os.getenv('K_REVISION', os.getenv('LUMA_REVISION', 'local')),
-            'cloud.provider': 'gcp', 'cloud.account.id': project or 'sitiosweb1', 'cloud.region': 'us-central1'}
+            'cloud.provider': 'gcp', 'cloud.account.id': project or 'sitiosweb1',
+            'gcp.project_id': project or 'sitiosweb1', 'cloud.region': 'us-central1'}
         engine = os.getenv('GOOGLE_CLOUD_AGENT_ENGINE_ID') or os.getenv('LUMA_AGENT_ENGINE_ID')
         if engine:
             engine = engine.rsplit('/', 1)[-1]
