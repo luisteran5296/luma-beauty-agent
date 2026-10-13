@@ -16,6 +16,20 @@ def finite(value):
     return isinstance(value, (int,float)) and math.isfinite(value)
 
 
+def focused_evidence(context):
+    """Remove transport/provenance fields, preserving all factual catalog evidence."""
+    records = json.loads(context)
+    fields = {'id','title','title_en','brand','description','description_en','features',
+              'category','price_usd','price_mxn','price_source_usd','rating','review_count'}
+    result = []
+    for record in records:
+        item = {k:v for k,v in record.items() if k in fields}
+        for original, translated in [('title','title_en'),('description','description_en')]:
+            if item.get(original) == item.get(translated): item.pop(translated,None)
+        result.append(item)
+    return json.dumps(result,ensure_ascii=False)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--report',default='reports/hardening-evaluation.json')
@@ -23,8 +37,12 @@ def main():
     parser.add_argument('--status',action='store_true')
     parser.add_argument('--offline-sdk',action='store_true',help='Supported native EvalTask fallback; bounded saved synthetic responses')
     parser.add_argument('--retry-missing',action='store_true',help='Retry only missing native offline grades, never shopping inference')
+    parser.add_argument('--focused-sequential',action='store_true',help='Grade individually using all factual evidence without URLs/duplicate fields')
+    parser.add_argument('--retry-timeout',type=int,default=120)
     parser.add_argument('--destination',default='gs://sitiosweb1-beauty-store-catalog/evaluations/hardening')
     args = parser.parse_args()
+    if not 1 <= args.retry_timeout <= 600: raise SystemExit('Retry timeout must be 1–600 seconds')
+    if args.focused_sequential and not args.offline_sdk: raise SystemExit('Focused grading requires --offline-sdk')
     if args.status:
         from agentplatform import Client
         manifest = json.loads(Path('reports/native-evaluation.json').read_text())
@@ -64,21 +82,33 @@ Explain defects specifically. Do not penalize a correct no-match or clarificatio
 SHOPPER: {prompt}
 CANONICAL EVIDENCE: {context}
 ANSWER: {response}'''
-        task = EvalTask(dataset=pd.DataFrame([{'prompt':c['prompt'],'response':c['answer'],'context':c['context']} for c in cases]),
-            metrics=[PointwiseMetric(metric='luma_grounded_quality',metric_prompt_template=rubric),
-                *([] if previous else [MetricPromptTemplateExamples.Pointwise.SAFETY])],experiment='luma-hardening-offline')
-        result = task.evaluate(evaluation_service_qps=.25,retry_timeout=120,
-            experiment_run_name='candidate-'+report['candidate_code_hash'][:16]+('-missing' if previous else '')+'-'+uuid4().hex[:6])
+        groups = [[case] for case in cases] if args.focused_sequential else [cases]
+        graded = []
+        for group in groups:
+            dataset = [{'prompt':c['prompt'],'response':c['answer'],'context':
+                focused_evidence(c['context']) if args.focused_sequential else c['context']} for c in group]
+            task = EvalTask(dataset=pd.DataFrame(dataset),
+                metrics=[PointwiseMetric(metric='luma_grounded_quality',metric_prompt_template=rubric),
+                    *([] if previous else [MetricPromptTemplateExamples.Pointwise.SAFETY])],experiment='luma-hardening-offline')
+            result = task.evaluate(evaluation_service_qps=.25,retry_timeout=args.retry_timeout,
+                experiment_run_name='candidate-'+report['candidate_code_hash'][:16]+('-missing' if previous else '')+'-'+uuid4().hex[:6])
+            rows = result.metrics_table.to_dict('records')
+            if args.focused_sequential:
+                rows[0]['grading_context'] = dataset[0]['context']
+                rows[0]['context'] = group[0]['context']
+            graded.extend(rows)
         manifest.update(submitted=True,interface='native-offline-evaltask',
-            summary=result.summary_metrics,rows=result.metrics_table.to_dict('records'))
+            summary=result.summary_metrics,rows=graded)
         if previous:
             updates = {(r['prompt'],r['response'],r['context']):r for r in manifest['rows']}
             for row in previous['rows']:
                 update = updates.get((row['prompt'],row['response'],row['context']))
                 if update:
                     row.update({k:v for k,v in update.items() if k.startswith('luma_grounded_quality/')})
+                    if 'grading_context' in update: row['grading_context'] = update['grading_context']
             manifest = previous
             manifest['retried_missing_grades'] = len(cases)
+            manifest['retry_settings'] = {'timeout_seconds':args.retry_timeout,'focused_sequential':args.focused_sequential}
         quality = [r.get('luma_grounded_quality/score',float('nan')) for r in manifest['rows']]
         safety = [r.get('safety/score',float('nan')) for r in manifest['rows']]
         Path('reports/native-offline-evaluation.json').write_text(json.dumps(manifest,indent=2,default=str))

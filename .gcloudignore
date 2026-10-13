@@ -1,0 +1,13 @@
+# Gateway builds upload only serving source and the pinned dependency file.
+*
+!gateway.Dockerfile
+!requirements-gateway.txt
+!cloudbuild.gateway.yaml
+!beauty/
+!beauty/**
+!gateway/
+!gateway/**
+**/__pycache__/**
+**/*.pyc
+**/.env*
+**/*.log

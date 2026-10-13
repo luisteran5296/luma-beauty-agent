@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,10 @@ async def run(args):
                         assert len(event['product_ids']) <= 3
                         if 'max_price' in scenario:
                             assert all(float(selected.products[pid].price_usd) <= scenario['max_price'] for pid in event['product_ids'])
+                        if scenario.get('product_type') == 'moisturizer':
+                            assert all(not re.search(r'\b(serum|cleanser|face wash|body wash|toner|shampoo)\b',
+                                selected.products[pid].title_en or selected.products[pid].title,re.I)
+                                for pid in event['product_ids']), 'An add-on or cleansing product is not a primary moisturizer'
                         if scenario.get('empty'): assert not event['product_ids']
                         case.update(event)
                         case['passed'] = True

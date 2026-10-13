@@ -17,7 +17,7 @@ def main():
     env = os.environ.copy()
     env['GOOGLE_OAUTH_ACCESS_TOKEN'] = GcloudCredentials.create().token
     values = {'billing_account':billing, 'create_firestore':str(managed_database).lower(),
-        'gateway_image':'us-central1-docker.pkg.dev/sitiosweb1/beauty-store/api:v4-hardening',
+        'gateway_image':os.getenv('LUMA_GATEWAY_IMAGE','us-central1-docker.pkg.dev/sitiosweb1/beauty-store/api:v4-hardening'),
         'runtime_resource':runtime,
         'catalog_version':'c11ba6e461c161c0d3db440b7e0a1deac79ef1f969245612a51e67253ac2861c',
         'hosting_origin':'https://sitiosweb1-luma-beauty.web.app'}
