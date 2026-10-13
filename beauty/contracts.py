@@ -16,7 +16,7 @@ class Turn(BaseModel):
     history: list[HistoryItem] = Field(default_factory=list, max_length=12)
     catalog_version: str = Field(pattern=r'^[a-f0-9]{64}$')
     traceparent: str | None = Field(default=None,max_length=55,
-        pattern=r'^00-[a-f0-9]{32}-[a-f0-9]{16}-(00|01)$')
+        pattern=r'^00-[a-f0-9]{32}-[a-f0-9]{16}-[a-f0-9]{2}$')
 
     @field_validator('traceparent')
     @classmethod

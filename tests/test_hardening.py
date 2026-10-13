@@ -249,6 +249,10 @@ async def test_gateway_runtime_context_has_one_trace_and_private_parent(monkeypa
     with provider.get_tracer('test').start_as_current_span('luma.request') as root:
         async for _ in gateway.runtime_events({'traceparent':'untrusted-input'}): pass
         assert captured['wire']['traceparent']==captured['traceparent']
+        # Validate the real SDK-generated wire field, including W3C flags 03
+        # (sampled + randomly generated trace ID), before simulating the proxy.
+        Turn(message='synthetic',catalog_version='a'*64,
+            traceparent=captured['wire']['traceparent'])
         # Runtime's proxy may replace the header; the private field must retain
         # the transport's original server-generated parent.
         captured['traceparent'] = '00-'+'1'*32+'-'+'2'*16+'-01'
@@ -265,6 +269,11 @@ def test_runtime_trace_metadata_rejects_invalid_identifiers():
     for invalid in ['untrusted','00-'+'0'*32+'-'+'1'*16+'-01','00-'+'1'*32+'-'+'0'*16+'-01']:
         with pytest.raises(ValidationError):
             Turn(message='synthetic',catalog_version='a'*64,traceparent=invalid)
+
+
+def test_runtime_trace_metadata_accepts_w3c_random_trace_flag():
+    parent='00-'+'1'*32+'-'+'2'*16+'-03'
+    assert Turn(message='synthetic',catalog_version='a'*64,traceparent=parent).traceparent==parent
 
 
 def test_shared_model_first_load_is_singleflight(monkeypatch):
