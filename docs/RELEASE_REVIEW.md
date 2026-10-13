@@ -6,7 +6,7 @@ quotas and scale-to-zero settings are preserved.
 
 | Review item | Result |
 |---|---|
-| Root backend tests | 47 passed locally; private-catalog test skips when its snapshot is absent in CI |
+| Root backend tests | 48 passed locally; two private-catalog tests skip when snapshots are absent in CI |
 | Agent tests | 2 passed; 6 scaffold live integration tests intentionally skipped |
 | Browser / frontend | 9 tests passed; production build passed |
 | Vulnerabilities | Root, gateway, agent export and isolated evaluation requirements clean; npm audit clean |

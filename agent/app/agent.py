@@ -25,6 +25,14 @@ def evidence(product):
             'price_usd': float(product.price_usd), 'rating': product.rating, 'review_count': product.review_count}
 
 
+def require_catalog_version(catalog, state):
+    expected = state.get('catalog_version', catalog.version)
+    if expected != catalog.version:
+        emit('guard_failure', outcome='catalog_changed')
+        raise RuntimeError('Catalog changed during this turn')
+    state['catalog_version'] = expected
+
+
 async def search_products(query: str, tool_context: ToolContext, max_price_usd: float | None = None, category: str | None = None) -> dict:
     """Find real catalog products matching needs. max_price_usd is a hard USD ceiling.
 
@@ -32,6 +40,7 @@ async def search_products(query: str, tool_context: ToolContext, max_price_usd: 
     a catalog category; omit it if unsure.
     """
     catalog = await asyncio.to_thread(get_catalog)
+    require_catalog_version(catalog, tool_context.state)
     tool_context.state['tool_calls'] = tool_context.state.get('tool_calls', 0) + 1
     if tool_context.state['tool_calls'] > 4:
         raise RuntimeError('Tool allowance exceeded')
@@ -54,7 +63,9 @@ async def get_product(product_id: str, tool_context: ToolContext) -> dict:
     if tool_context.state['tool_calls'] > 4:
         raise RuntimeError('Tool allowance exceeded')
     with span('product_detail'):
-        product = (await asyncio.to_thread(get_catalog)).products.get(product_id)
+        catalog = await asyncio.to_thread(get_catalog)
+        require_catalog_version(catalog, tool_context.state)
+        product = catalog.products.get(product_id)
     if not product:
         return {'error': 'Product not found'}
     tool_context.state['allowed_product_ids'] = sorted(set(tool_context.state.get('allowed_product_ids', [])) | {product.id})

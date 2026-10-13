@@ -174,7 +174,9 @@ async def chat(request: ChatRequest, uid: str = Depends(visitor)):
     except SessionConflict as exc:
         emit('chat_rejected', outcome='conflict')
         raise HTTPException(409, str(exc)) from None
-    except Exception:
+    except Exception as exc:
+        emit('chat_failed', outcome='internal', duration_seconds=time.monotonic()-started,
+            error_type=type(exc).__name__)
         raise HTTPException(503, 'Chat allowance could not be verified') from None
     trace.get_current_span().set_attribute('luma.admitted', True)
 
@@ -234,5 +236,9 @@ async def chat(request: ChatRequest, uid: str = Depends(visitor)):
             except Exception as exc:
                 emit('runtime_cleanup', outcome='failed', error_type=type(exc).__name__)
             if not completed:
-                await asyncio.shield(threaded('lease_release', quota().finish, str(request.session_id), str(request.request_id), message, None))
+                try:
+                    await asyncio.shield(threaded('lease_release', quota().finish, str(request.session_id), str(request.request_id), message, None))
+                except Exception as exc:
+                    # Lease expires automatically if persistence is unavailable.
+                    emit('lease_cleanup', outcome='failed', error_type=type(exc).__name__)
     return StreamingResponse(stream(), media_type='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})

@@ -266,3 +266,17 @@ def test_private_runtime_exports_remote_children_without_environment_id():
         with provider.get_tracer('test').start_as_current_span('luma.embedding'): pass
     assert len(capture.spans)==2 and not processor.pending
     provider.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_tools_reject_mid_turn_catalog_refresh(monkeypatch, product):
+    from types import SimpleNamespace
+    import agent.app.agent as agent
+    original = Catalog([product])
+    changed = Catalog([product.model_copy(update={'description_en':'Changed catalog evidence'})])
+    monkeypatch.setattr(agent,'get_catalog',lambda:changed)
+    tool = SimpleNamespace(state={'catalog_version':original.version})
+    with pytest.raises(RuntimeError,match='Catalog changed'):
+        await agent.search_products('moisturizer',tool)
+    with pytest.raises(RuntimeError,match='Catalog changed'):
+        await agent.get_product(product.id,tool)

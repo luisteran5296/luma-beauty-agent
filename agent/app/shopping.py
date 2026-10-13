@@ -32,7 +32,7 @@ async def _respond(payload):
     latest_ids = next((x.get('product_ids', []) for x in reversed(payload.get('history', [])) if x.get('role') == 'assistant'), [])[:3]
     prior_products = [catalog.products[pid] for pid in latest_ids if pid in catalog.products]
     await sessions.create_session(app_name=agent_app.name, user_id=user_id, session_id=session_id,
-        state={'allowed_product_ids': [p.id for p in prior_products]})
+        state={'allowed_product_ids': [p.id for p in prior_products], 'catalog_version':catalog.version})
     runner = Runner(app=agent_app, session_service=sessions)
     history = [{'role': x['role'], 'text': str(x['text'])[:1400]} for x in payload.get('history', [])[-12:]]
     content = json.dumps({'prior_transcript': history, 'prior_products_current_catalog': [evidence(p) for p in prior_products],

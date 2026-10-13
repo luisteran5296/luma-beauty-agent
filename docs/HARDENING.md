@@ -224,3 +224,11 @@ expired transcripts, so review retention and backups before enabling TTL.
 References: [runtime tracing](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/tracing),
 [trace views](https://docs.cloud.google.com/gemini-enterprise-agent-platform/optimize/observability/traces),
 [native evaluation](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/evaluation-agents-client).
+
+Rollback evidence helper: `python -m scripts.snapshot_release` saves the gateway
+revision/image, private runtime configuration and candidate/catalog association in
+ignored `reports/release-evidence.json`. Agent Runtime's inline source is input-only,
+so its GET response cannot provide the old source bytes. The helper archives the
+pre-upgrade `origin/main` source commit (currently `570c43d`) for rebuilding the old
+agent if necessary. Verify that ref against the last release before future runs;
+it is not an automatic archive of an unknown live image.

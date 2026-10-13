@@ -74,7 +74,7 @@ acknowledges the gap rather than supplying an invented product or claim.
   turns fell from 138.16 to 30.64 seconds. Repeat warm p95: 13.39 seconds at
   concurrency one and 12.60 seconds at concurrency two (six warm samples each;
   hosted cold/warm performance still requires rollout validation).
-- Forty-seven backend tests, two agent checks and nine browser tests pass. The
+- Forty-eight backend tests, two agent checks and nine browser tests pass. The
   20-scenario suite passes deterministic constraints; native offline grading of
   fourteen synthetic responses scores 4.79/5 for quality and 14/14 safe. These small
   evaluations do not establish production safety. Detailed reports stay private.
