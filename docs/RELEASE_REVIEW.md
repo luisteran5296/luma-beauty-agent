@@ -11,8 +11,9 @@ quotas and scale-to-zero settings are preserved.
 | Browser / frontend | 9 tests passed; production build passed |
 | Vulnerabilities | Root, gateway, agent export and isolated evaluation requirements clean; npm audit clean |
 | Synthetic security suite | 20 scenarios, 22 checks/turns passed |
-| Native offline grades | 14/14 complete, quality mean 4.79/5, minimum 4/5, safety 14/14 |
-| Managed evaluation API | Failed with Google internal errors; supported native EvalTask fallback passed |
+| Final native offline grades | 12/14 quality grades, mean 4.75/5, minimum 4/5; safety 14/14; two Google judge deadlines remain after bounded retry |
+| Quality release gate | Incomplete; all final-candidate grades must be present before rollout; earlier candidate passed 14/14 |
+| Managed evaluation API | Failed with Google internal errors; supported native EvalTask fallback used |
 | Performance baseline / candidate | Identical seven local turns: 138.16 s / 30.64 s total |
 | Paired semantic comparison | Six native ties; one Google judge timeout remains ungraded after bounded retry |
 | Repeat warm p95 | 13.39 s at concurrency 1; 12.60 s at concurrency 2; six samples each |
@@ -28,6 +29,8 @@ Review [HARDENING.md](HARDENING.md), [THREAT_MODEL.md](THREAT_MODEL.md) and
 [COSTS.md](COSTS.md). After approval, snapshot previous artifacts/revisions, build
 immutable candidates, regenerate the plan with the verified image, update the same
 private runtime, and apply store-only monitoring/TTL changes. Backfill legacy expiry.
+Resolve the two missing final-candidate quality grades before deploying; approval
+does not override this release gate.
 
 Hosted trace correlation/content inspection, cold-start timing, SSE failure metrics,
 lease cleanup, console incidents and actual telemetry billing are post-rollout

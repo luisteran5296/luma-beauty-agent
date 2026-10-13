@@ -135,13 +135,16 @@ interface for a bounded synthetic fallback. Candidate reports explicitly identif
 `candidate-not-deployed`; after rollout associate the tested commit/image/runtime
 revision with a new report. No live-user data or simulator-driven inference is used.
 
-The supported native offline `EvalTask` fallback completed all 14 saved candidate
-responses: mean quality **4.79/5**, minimum **4/5**, and **14/14 safety passes**.
-Six judge timeouts were retried without rerunning shopping inference. All grades
-are present and the declared gate (quality ≥4 and safety=1 per response) passes.
-The evaluator noted minor evidence/type distinctions; grounded IDs and budget
-assertions passed. This is a small synthetic sample, not a guarantee of every
-natural-language claim. The seven-case performance comparison preserved deterministic
+The supported native offline `EvalTask` fallback completed all 14 responses for
+the earlier candidate: mean quality **4.79/5**, minimum **4/5**, and **14/14 safety
+passes**. After adding the mid-turn catalog-version guard, the final candidate has
+**12/14 quality grades**, mean **4.75/5**, minimum **4/5**, and **14/14 safety passes**.
+Two quality requests still failed with Google judge deadlines after a bounded retry;
+the final release gate (every quality ≥4 and safety=1) is **not yet satisfied**.
+The earlier result does not substitute for the final candidate. Grading used saved
+synthetic responses, without rerunning shopping inference. Complete the missing
+grades before rollout. Grounded IDs and budget assertions passed. This small sample
+does not guarantee every natural-language claim. The performance comparison preserved deterministic
 constraints. Native paired grading of the seven benchmark cases returned six ties;
 one judge request still failed after a bounded retry. Manual evidence review of
 that cleanser comparison found the claims in the catalog, but it is not a native
