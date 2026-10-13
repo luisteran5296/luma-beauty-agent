@@ -15,6 +15,7 @@ def main():
         'reserved_logs_gib':log_gib,'reserved_metrics_mib':metric_mib,'reserved_spans':spans,
         'metadata_cost_if_account_allowances_exhausted':round(paid_metadata,3),
         'existing_project_uptime_checks':preflight.get('existing_uptime_checks'),
+        'observed_uptime_executions_month_to_date':preflight.get('observed_uptime_executions_month_to_date'),
         'new_uptime_executions_monthly':uptime_executions,'uptime_free_project_allowance':1000000,
         'uptime_cost_if_project_allowance_exhausted':uptime_executions*.30/1000,
         'additional_compute_storage_firestore_reserve_usd':.75,

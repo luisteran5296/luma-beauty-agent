@@ -30,6 +30,17 @@ def main():
                 report['runtime_metric_descriptors'] = response.json().get('metricDescriptors',[])
     from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1,hour=0,minute=0,second=0,microsecond=0)
+    uptime_usage = session.get('https://monitoring.googleapis.com/v3/projects/sitiosweb1/timeSeries',params={
+        'filter':'metric.type="monitoring.googleapis.com/uptime_check/check_passed"',
+        'interval.endTime':now.isoformat(),'interval.startTime':month_start.isoformat(),
+        'aggregation.alignmentPeriod':'3600s','aggregation.perSeriesAligner':'ALIGN_COUNT',
+        'aggregation.crossSeriesReducer':'REDUCE_SUM','pageSize':10000},timeout=30)
+    if uptime_usage.status_code==200 and not uptime_usage.json().get('nextPageToken'):
+        report['observed_uptime_executions_month_to_date'] = sum(int(p['value'].get('int64Value',0))
+            for series in uptime_usage.json().get('timeSeries',[]) for p in series.get('points',[]))
+    else:
+        report['observed_uptime_executions_month_to_date'] = None
     response = session.get('https://monitoring.googleapis.com/v3/projects/sitiosweb1/timeSeries',params={
         'filter':'metric.type="aiplatform.googleapis.com/reasoning_engine/request_count"',
         'interval.endTime':now.isoformat(),'interval.startTime':(now-timedelta(days=7)).isoformat(),

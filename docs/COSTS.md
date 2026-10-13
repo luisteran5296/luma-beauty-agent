@@ -88,7 +88,8 @@ Allow another $0.75 for health requests, telemetry CPU and small storage/Firesto
 changes: approximately **$3.91/month even if account-wide metadata allowances
 are consumed**. Actual log-metric bytes and CPU cannot be established until rollout.
 
-Cloud discovery found no existing active uptime checks. One five-minute check at
+Cloud discovery found no existing active uptime checks and zero recorded check
+executions month-to-date on October 13. One five-minute check at
 six locations gives approximately 51,840 executions/month, within the project's
 one-million free executions. Previously deleted checks or future unrelated checks
 could consume that allowance. If exhausted, uptime alone adds about $15.55/month;

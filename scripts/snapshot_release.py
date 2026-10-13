@@ -30,7 +30,7 @@ def main():
         'previous_source_commit':previous_commit,'previous_source_archive':str(archive),
         'agent_source_input_only':not bool(artifacts(agent.json()))}
     commit = subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-    evaluation = json.loads(Path('reports/hardening-evaluation.json').read_text())
+    evaluation = json.loads(Path('reports/hardening-final-evaluation.json').read_text())
     quality = json.loads(Path('reports/native-offline-evaluation.json').read_text())
     report = {'candidate_commit':commit,'shopping_code_hash':evaluation['candidate_code_hash'],
         'catalog_version':evaluation['catalog_version'],'deployment_status':'candidate-not-deployed',

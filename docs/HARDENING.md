@@ -123,7 +123,7 @@ Answers are never cached. Exact token counting and model/tool limits remain.
 
 `evals/hardening.json` contains 20 scenarios: 12 synthetic model scenarios (14 turns)
 and eight deterministic security/failure scenarios. The latest run passed all 22
-checks/turns, using 25,417 input and 1,502 output tokens. Deterministic assertions
+checks/turns, using 24,749 input and 1,443 output tokens. Deterministic assertions
 verify canonical IDs, recommendation count and explicit budgets; these do not prove
 natural-language grounding. Native quality/safety grading is a separate release gate.
 
@@ -142,8 +142,11 @@ are present and the declared gate (quality ≥4 and safety=1 per response) passe
 The evaluator noted minor evidence/type distinctions; grounded IDs and budget
 assertions passed. This is a small synthetic sample, not a guarantee of every
 natural-language claim. The seven-case performance comparison preserved deterministic
-constraints; a statistically meaningful semantic regression study remains outside
-these small measurements.
+constraints. Native paired grading of the seven benchmark cases returned six ties;
+one judge request still failed after a bounded retry. Manual evidence review of
+that cleanser comparison found the claims in the catalog, but it is not a native
+grade. A statistically meaningful semantic regression study remains outside these
+small measurements.
 
 Production dependencies no longer install the unused evaluation SDK extra. Its
 LiteLLM pin was affected by CVE-2026-84377; grading libraries are isolated in

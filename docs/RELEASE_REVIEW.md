@@ -14,6 +14,7 @@ quotas and scale-to-zero settings are preserved.
 | Native offline grades | 14/14 complete, quality mean 4.79/5, minimum 4/5, safety 14/14 |
 | Managed evaluation API | Failed with Google internal errors; supported native EvalTask fallback passed |
 | Performance baseline / candidate | Identical seven local turns: 138.16 s / 30.64 s total |
+| Paired semantic comparison | Six native ties; one Google judge timeout remains ungraded after bounded retry |
 | Repeat warm p95 | 13.39 s at concurrency 1; 12.60 s at concurrency 2; six samples each |
 | Terraform review | 31 changes; no deletes; same managed database and unrelated services untouched |
 | Registry | One existing Luma match; registration unnecessary; invocation IAM remains private |
