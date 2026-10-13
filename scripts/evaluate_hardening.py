@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 from beauty.catalog import Catalog, get_catalog
 from agent.app.shopping import respond
+from agent.app.agent import evidence as original_evidence
 from beauty.telemetry import logger
 
 
@@ -38,8 +39,13 @@ async def run(args):
         history = []
         for prompt in scenario['messages']:
             case = {'id':scenario['id'], 'mode':'model', 'prompt':prompt, 'passed':False}
+            evidence_ids = set()
+            def capture_evidence(product):
+                evidence_ids.add(product.id)
+                return original_evidence(product)
             try:
-                with patch('agent.app.agent.get_catalog', lambda: selected), patch('agent.app.shopping.get_catalog', lambda: selected):
+                with patch('agent.app.agent.get_catalog', lambda: selected), patch('agent.app.shopping.get_catalog', lambda: selected), \
+                        patch('agent.app.agent.evidence', capture_evidence):
                     async for event in respond({'message':prompt,'history':history,'catalog_version':selected.version}):
                         if event['type'] != 'result': continue
                         assert all(pid in selected.products for pid in event['product_ids'])
@@ -53,7 +59,8 @@ async def run(args):
                         if scenario.get('empty'): assert not event['product_ids']
                         case.update(event)
                         case['passed'] = True
-                        case['context'] = json.dumps([p.public() for p in selected.products.values() if p.id in event['product_ids']])
+                        case['context'] = json.dumps([p.public() for p in selected.products.values() if p.id in evidence_ids])
+                        case['evidence_source'] = 'actual_tool_and_prior_product_evidence'
                         history.extend([{'role':'user','text':prompt},{'role':'assistant','text':event['answer'],'product_ids':event['product_ids']}])
                         report['input_tokens'] += event['usage'].get('input_tokens',0)
                         report['output_tokens'] += event['usage'].get('output_tokens',0)

@@ -5,11 +5,14 @@ import json
 import math
 import logging
 import time
+from contextvars import ContextVar
+from unittest.mock import patch
 from pathlib import Path
 from agent.app.shopping import respond
 from beauty.catalog import get_catalog
 from beauty.telemetry import logger
 from scripts.evaluate_shopping import SCENARIOS
+from agent.app.agent import evidence as original_evidence
 
 
 def percentile(values, fraction):
@@ -27,20 +30,30 @@ async def run(args):
     catalog = get_catalog()
     startup_seconds = time.monotonic()-startup
     turns = []
+    active_evidence = ContextVar('benchmark_evidence',default=None)
+    def capture_evidence(product):
+        ids = active_evidence.get()
+        if ids is not None: ids.add(product.id)
+        return original_evidence(product)
     semaphore = asyncio.Semaphore(args.concurrency)
     async def scenario(index, messages):
         history = []
         async with semaphore:
             for prompt in messages:
                 started = time.monotonic()
+                ids = set()
+                active_evidence.set(ids)
                 async for event in respond({'message':prompt,'history':history,'catalog_version':catalog.version}):
                     if event['type'] != 'result': continue
-                    turns.append({'case':index,'seconds':time.monotonic()-started,'usage':event['usage'],
+                    turns.append({'case':index,'prompt':prompt,'answer':event['answer'],
+                        'seconds':time.monotonic()-started,'usage':event['usage'],
+                        'evidence':[catalog.products[pid].public() for pid in sorted(ids)],
                         'product_ids':event['product_ids'],'model_calls':event['model_calls'],'tool_calls':event['tool_calls']})
                     history.extend([{'role':'user','text':prompt},{'role':'assistant','text':event['answer'],'product_ids':event['product_ids']}])
     # First scenario is run separately to identify process initialization overhead.
-    await scenario(0,SCENARIOS[0])
-    await asyncio.gather(*(scenario(i,messages) for i,messages in enumerate(SCENARIOS[1:],1)))
+    with patch('agent.app.agent.evidence',capture_evidence):
+        await scenario(0,SCENARIOS[0])
+        await asyncio.gather(*(scenario(i,messages) for i,messages in enumerate(SCENARIOS[1:],1)))
     warm = [t['seconds'] for t in turns[1:]]
     report = {'catalog_version':catalog.version,'concurrency':args.concurrency,'turns':turns,
         'catalog_startup_seconds':startup_seconds,
