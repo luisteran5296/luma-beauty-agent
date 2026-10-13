@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt pip-audit
-      - run: pytest tests -q
+      - run: python -m pytest tests -q
       - run: python -m scripts.evaluate_hardening
       - run: pip-audit -r requirements.txt
       - run: pip-audit -r requirements-gateway.txt
